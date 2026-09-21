@@ -5,12 +5,16 @@ edition = "2024"
 # The README claims this too; keeping it here makes cargo fail early and
 # clearly instead of letting an old toolchain trip over edition 2024 features.
 rust-version = "1.88"
+authors = ["microfatrat"]
 description = "A 2048 clone for the terminal, built with ratatui"
+documentation = "https://docs.rs/t2048"
 readme = "README.md"
-license = "MIT"
 repository = "https://github.com/microfatrat/t2048"
+license = "MIT"
 keywords = ["game", "tui", "terminal", "2048", "ratatui"]
 categories = ["games", "command-line-utilities"]
+# Repo-only files; there is no reason to ship the CI configuration in the crate.
+exclude = [".github/"]
 
 [dependencies]
 crossterm = "0.29.0"
