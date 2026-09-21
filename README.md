@@ -22,7 +22,29 @@
 - 退出 / panic 时都会恢复终端状态（退出备用屏幕、恢复光标、关闭 raw 模式）
 - 只有一个可执行文件，运行时无额外依赖
 
-## 构建与运行
+## 安装
+
+### 预编译二进制
+
+每个 `v*` 版本都会在 [GitHub Releases](https://github.com/microfatrat/t2048/releases) 提供三个平台的二进制：
+
+| 平台 | 文件 |
+| --- | --- |
+| Linux x86_64 | `t2048-x86_64-unknown-linux-gnu` |
+| Windows x86_64 | `t2048-x86_64-pc-windows-msvc.exe` |
+| macOS (Apple Silicon) | `t2048-aarch64-apple-darwin` |
+
+以 Linux 为例：
+
+```bash
+curl -LO https://github.com/microfatrat/t2048/releases/latest/download/t2048-x86_64-unknown-linux-gnu
+chmod +x t2048-x86_64-unknown-linux-gnu
+./t2048-x86_64-unknown-linux-gnu
+```
+
+发布产物附带 `SHA256SUMS`，下载后可以校验。
+
+### 从源码构建
 
 ```bash
 cargo run --release
@@ -41,13 +63,15 @@ t2048
 
 底层依赖 [ratatui](https://ratatui.rs) + [crossterm](https://github.com/crossterm-rs/crossterm)，两者都官方支持 Linux / macOS / Windows。源码里唯一一处平台分支是最高分的存放位置（见下），其余代码不分平台。
 
-本仓库实际验证过的程度：
+本仓库的验证情况：
 
 | 平台 | 验证方式 | 结果 |
 | --- | --- | --- |
-| Linux x86_64 | `cargo build --release`、真实 pty 交互测试、`cargo test` | ✅ 99 个测试通过 |
-| Windows x86_64 (MSVC) | 1.0.0 时用 Windows 工具链交叉编译出 `t2048.exe`，在 Windows 上运行并 `cargo test` | ⚠️ 1.0.0 的 93 个测试通过；本次新增测试未复测 |
-| macOS | 未编译验证（本机没有 Apple 工具链）。`cargo tree --target aarch64-apple-darwin` 依赖解析正常，且 macOS 走的是和 Linux 相同的代码路径 | ⚠️ 未实测 |
+| Linux x86_64 | `cargo build --release`、真实 pty 交互测试、`cargo test`、GitHub Actions CI | ✅ 99 个测试通过 |
+| Windows x86_64 (MSVC) | GitHub Actions CI 在 `windows-latest` 上运行 `cargo test` 与 release 构建 | ✅ CI 通过 |
+| macOS (Apple Silicon) | GitHub Actions CI 在 `macos-latest` 上运行 `cargo test` 与 release 构建 | ✅ CI 通过 |
+
+macOS Intel（`x86_64-apple-darwin`）没有单独验证；它和 Linux 走的是同一套代码路径。
 
 最高分的存放位置按平台区分：
 
@@ -118,8 +142,9 @@ t2048 [OPTIONS]
 ## 测试
 
 ```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
 cargo test      # 99 个测试
-cargo clippy --all-targets
 ```
 
 测试覆盖了三类内容：
@@ -135,7 +160,7 @@ cargo clippy --all-targets
 - **撤销 / 重做**：`game.rs` 维护 `history` 和 `future` 两个快照栈，快照里连 `moves` 计数一起存，所以撤销和重做都能精确还原。任何一次新移动都会清空 `future`，与 vim 丢弃重做分支的规则一致。重做有可能落在一个已经结束的局面，所以还原后会重新判定胜负，而不是假定还能继续走。
 - **count 的实现**：`App` 里只存一个待执行的数字，遇到移动键时把它当作「重复这个动作多少次」；因为重复同一个方向时若某次没改变棋盘，后面也不可能改变，所以提前退出循环。
 - **渲染**：每个方块是一个 7×3 的矩形，先把整块填成对应背景色，再把数字居中画在中间一行；方块之间留 1 格空隙，露出棋盘底色。刚生成的方块会高亮几帧。结束 / 帮助浮层与棋盘同宽并居中于棋盘，这样左右边框正好对齐。
-- **重绘**：只有在状态真的变化时才调用 `terminal.draw`，空闲时不会反复刷屏。
+- **重绘**：只在状态真的变化时才调用 `terminal.draw`；没有动画时轮询间隔放宽到 1 秒，生成高亮期间才按 60ms 走动画帧，空闲时几乎不占 CPU。
 
 ## 许可证
 
