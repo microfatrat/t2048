@@ -6,7 +6,7 @@
 
 用 Rust + [ratatui](https://ratatui.rs) 写的 2048，直接在终端里玩。
 
-当前版本 **1.0.1**，变更见 [更新日志](CHANGELOG.md)。
+当前版本 **1.0.2**，变更见 [更新日志](CHANGELOG.md)。
 
 ![游戏截图](assets/screenshot.png)
 

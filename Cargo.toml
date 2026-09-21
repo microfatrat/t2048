@@ -1,6 +1,6 @@
 [package]
 name = "t2048"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 # The README claims this too; keeping it here makes cargo fail early and
 # clearly instead of letting an old toolchain trip over edition 2024 features.
