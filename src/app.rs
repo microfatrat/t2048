@@ -26,19 +26,31 @@ pub enum SaveOnExit {
     No,
 }
 
+/// The mutually exclusive input modes. Keeping them in one enum means an
+/// impossible combination like "help open while waiting for `Z`" cannot be
+/// represented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// Ordinary play.
+    Normal,
+    /// The help overlay is up; the next key dismisses it.
+    Help,
+    /// A `Z` was typed; the next key decides between `ZZ` and `ZQ`.
+    PendingZ,
+}
+
 /// Everything the UI renders, plus the rules for reacting to input.
 pub struct App {
     game: Game,
     running: bool,
-    show_help: bool,
+    /// Input mode: normal play, the help overlay, or a half-typed `ZZ` / `ZQ`.
+    mode: Mode,
     flash: u8,
     needs_redraw: bool,
     saved_best: u64,
     save_on_exit: SaveOnExit,
     /// Digits typed before a motion, as in vim's `3j`.
     count: Option<u32>,
-    /// Set by the `Z` of `ZZ` / `ZQ`, which waits for one more key.
-    pending_z: bool,
 }
 
 impl App {
@@ -64,13 +76,12 @@ impl App {
         Self {
             game,
             running: true,
-            show_help: false,
+            mode: Mode::Normal,
             flash: 0,
             needs_redraw: true,
             saved_best,
             save_on_exit: SaveOnExit::Yes,
             count: None,
-            pending_z: false,
         }
     }
 
@@ -86,7 +97,7 @@ impl App {
 
     /// Whether the help overlay is up.
     pub fn show_help(&self) -> bool {
-        self.show_help
+        self.mode == Mode::Help
     }
 
     /// How much longer the spawn highlight lasts.
@@ -130,7 +141,11 @@ impl App {
     pub fn on_tick(&mut self) {
         if self.flash > 0 {
             self.flash -= 1;
-            self.needs_redraw = true;
+            // The highlight is a boolean on screen, so only the tick that ends
+            // it changes what is drawn.
+            if self.flash == 0 {
+                self.needs_redraw = true;
+            }
         }
     }
 
@@ -143,19 +158,19 @@ impl App {
         }
 
         // While the help overlay is up, any key dismisses it.
-        if self.show_help {
+        if self.mode == Mode::Help {
             if key.code == KeyCode::Char('q') {
                 self.quit(SaveOnExit::Yes);
             }
-            self.show_help = false;
+            self.mode = Mode::Normal;
             self.needs_redraw = true;
             return;
         }
 
         // The second key of `ZZ` / `ZQ`. Anything else cancels the sequence and
         // does nothing at all, the way an unknown vim command does.
-        if self.pending_z {
-            self.pending_z = false;
+        if self.mode == Mode::PendingZ {
+            self.mode = Mode::Normal;
             self.needs_redraw = true;
             match key.code {
                 KeyCode::Char('Z') => self.quit(SaveOnExit::Yes),
@@ -166,10 +181,14 @@ impl App {
         }
 
         // A `[count]`. A leading zero is not a count, so `0` on its own is
-        // inert, exactly as in vim.
+        // inert, exactly as in vim. Modified digits (Ctrl-3, Alt-3, ...) are
+        // not counts.
         if let KeyCode::Char(digit @ '0'..='9') = key.code {
+            if has_non_shift_modifier(key) {
+                return;
+            }
             if digit != '0' || self.count.is_some() {
-                let value = self.count.unwrap_or(0) * 10 + digit.to_digit(10).unwrap();
+                let value = self.count.unwrap_or(0) * 10 + (digit as u32 - '0' as u32);
                 self.count = Some(value.min(MAX_COUNT));
                 self.needs_redraw = true;
             }
@@ -187,7 +206,7 @@ impl App {
         }
 
         // Motions take the count: `5j` moves down five times.
-        if let Some(direction) = direction_for(key.code) {
+        if let Some(direction) = direction_for(key) {
             let times = self.count.take().unwrap_or(1);
             self.slide(direction, times);
             return;
@@ -204,7 +223,7 @@ impl App {
 
         match key.code {
             KeyCode::Char('Z') => {
-                self.pending_z = true;
+                self.mode = Mode::PendingZ;
                 self.needs_redraw = true;
             }
             // Ctrl-r first: redo, the partner of `u`.
@@ -270,7 +289,7 @@ impl App {
         self.game.restart();
         self.flash = 0;
         self.count = None;
-        self.pending_z = false;
+        self.mode = Mode::Normal;
         self.needs_redraw = true;
     }
 
@@ -282,7 +301,7 @@ impl App {
     }
 
     fn open_help(&mut self) {
-        self.show_help = true;
+        self.mode = Mode::Help;
         self.needs_redraw = true;
     }
 
@@ -307,15 +326,31 @@ impl Default for App {
 /// Maps a key to the direction it pushes the tiles.
 ///
 /// `hjkl` are the vim motions. The arrow keys are kept as an alias for anyone
-/// who would rather not leave the arrow cluster.
-fn direction_for(code: KeyCode) -> Option<Direction> {
-    match code {
+/// who would rather not leave the arrow cluster. Modified keys such as `Ctrl-h`
+/// and `Alt-h` are not motions.
+fn direction_for(key: KeyEvent) -> Option<Direction> {
+    if has_non_shift_modifier(key) {
+        return None;
+    }
+    match key.code {
         KeyCode::Char('h') | KeyCode::Left => Some(Direction::Left),
         KeyCode::Char('j') | KeyCode::Down => Some(Direction::Down),
         KeyCode::Char('k') | KeyCode::Up => Some(Direction::Up),
         KeyCode::Char('l') | KeyCode::Right => Some(Direction::Right),
         _ => None,
     }
+}
+
+/// True when a key carries a modifier other than Shift, such as `Ctrl-h` or
+/// `Alt-3`. Shift is allowed so `Shift-Left` keeps working like `Left`.
+fn has_non_shift_modifier(key: KeyEvent) -> bool {
+    key.modifiers.intersects(
+        KeyModifiers::CONTROL
+            | KeyModifiers::ALT
+            | KeyModifiers::SUPER
+            | KeyModifiers::HYPER
+            | KeyModifiers::META,
+    )
 }
 
 /// True for Ctrl-`letter`.
@@ -340,21 +375,15 @@ mod tests {
     const BOTTOM_ROW_ONLY: Grid = [[0; SIZE], [0; SIZE], [0; SIZE], [2, 4, 2, 4]];
 
     fn app_with(grid: Grid) -> App {
-        App {
-            game: Game::from_grid(grid, 0),
-            running: true,
-            show_help: false,
-            flash: 0,
-            needs_redraw: true,
-            saved_best: 0,
-            save_on_exit: SaveOnExit::Yes,
-            count: None,
-            pending_z: false,
-        }
+        App::from_game(Game::from_grid(grid, 0), 0)
     }
 
     fn press(app: &mut App, code: KeyCode) {
         app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    fn plain(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
     }
 
     fn press_ctrl(app: &mut App, letter: char) {
@@ -378,7 +407,7 @@ mod tests {
             ('l', Direction::Right),
         ] {
             assert_eq!(
-                direction_for(KeyCode::Char(key)),
+                direction_for(plain(KeyCode::Char(key))),
                 Some(expected),
                 "`{key}` should move {expected:?}"
             );
@@ -393,7 +422,7 @@ mod tests {
             (KeyCode::Up, Direction::Up),
             (KeyCode::Right, Direction::Right),
         ] {
-            assert_eq!(direction_for(key), Some(expected), "{key:?}");
+            assert_eq!(direction_for(plain(key)), Some(expected), "{key:?}");
         }
     }
 
@@ -401,7 +430,7 @@ mod tests {
     fn uppercase_hjkl_are_not_motions() {
         // In vim H/J/K/L are separate commands, so they must not move tiles.
         for key in ['H', 'J', 'K', 'L'] {
-            assert_eq!(direction_for(KeyCode::Char(key)), None, "`{key}`");
+            assert_eq!(direction_for(plain(KeyCode::Char(key))), None, "`{key}`");
         }
 
         let mut app = app_with(MERGEABLE);
@@ -415,7 +444,7 @@ mod tests {
     fn wasd_no_longer_moves() {
         // Dropped in favour of the vim motions.
         for key in ['w', 'a', 's', 'd'] {
-            assert_eq!(direction_for(KeyCode::Char(key)), None, "`{key}`");
+            assert_eq!(direction_for(plain(KeyCode::Char(key))), None, "`{key}`");
         }
 
         let mut app = app_with(MERGEABLE);
@@ -437,6 +466,27 @@ mod tests {
                 "`{key}` behaved unexpectedly"
             );
         }
+    }
+
+    #[test]
+    fn modified_keys_are_not_motions_or_counts() {
+        // A terminal can report Ctrl-h or Alt-h as a plain `h` plus a modifier;
+        // those must not move the tiles. The same goes for Ctrl-3 and friends.
+        let mut app = app_with(MERGEABLE);
+        for (code, modifiers) in [
+            (KeyCode::Char('h'), KeyModifiers::CONTROL),
+            (KeyCode::Char('j'), KeyModifiers::ALT),
+            (KeyCode::Char('3'), KeyModifiers::CONTROL),
+        ] {
+            app.on_key(KeyEvent::new(code, modifiers));
+        }
+        assert_eq!(app.game().moves(), 0);
+        assert_eq!(app.pending_count(), None);
+
+        // Shift is not a command modifier, so Shift-Left still moves.
+        let mut shifted = app_with(MERGEABLE);
+        shifted.on_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+        assert_eq!(shifted.game().moves(), 1);
     }
 
     // --- counts -------------------------------------------------------
@@ -770,6 +820,29 @@ mod tests {
             app.on_tick();
         }
         assert_eq!(app.flash(), 0);
+    }
+
+    #[test]
+    fn the_spawn_highlight_only_redraws_when_it_ends() {
+        let mut app = app_with(MERGEABLE);
+        press(&mut app, KeyCode::Char('h'));
+        app.mark_drawn();
+
+        // The highlight is drawn as a boolean, so only the tick that clears it
+        // changes the frame.
+        for _ in 0..FLASH_TICKS - 1 {
+            app.on_tick();
+            assert!(
+                !app.needs_redraw(),
+                "an intermediate tick asked for a redraw"
+            );
+        }
+
+        app.on_tick();
+        assert!(
+            app.needs_redraw(),
+            "the tick that clears the highlight must redraw"
+        );
     }
 
     #[test]

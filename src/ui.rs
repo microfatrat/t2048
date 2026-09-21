@@ -348,8 +348,8 @@ fn draw_help(frame: &mut Frame, area: Rect, theme: &Theme) {
 
 /// Draws a box over the board, sized so that no line is ever clipped.
 ///
-/// `min_width` is the width to use when the content is narrower than that;
-/// the box always fits inside `area`.
+/// The box spans the board's full width, so its borders line up with the
+/// board's, and it is centred inside `board` vertically.
 fn draw_popup(
     frame: &mut Frame,
     board: Rect,
@@ -445,10 +445,19 @@ mod tests {
         app.on_key(KeyEvent::new(code, KeyModifiers::NONE));
     }
 
+    /// Counts all-digit words inside the board area only, so the title and the
+    /// SCORE/BEST values cannot be mistaken for tiles.
     fn numbers_on(screen: &str) -> usize {
+        let height = screen.lines().count() as u16;
+        let content_top = height.saturating_sub(CONTENT_H) / 2;
+        let board_top = (content_top + HEADER_H + SPACER) as usize;
+
         screen
-            .split_whitespace()
-            .filter(|word| word.chars().all(|c| c.is_ascii_digit()) && !word.is_empty())
+            .lines()
+            .skip(board_top)
+            .take(BOARD_OUTER_H as usize)
+            .flat_map(|line| line.split_whitespace())
+            .filter(|word| word.chars().all(|c| c.is_ascii_digit()))
             .count()
     }
 
@@ -463,7 +472,8 @@ mod tests {
     fn a_new_game_renders_its_starting_tiles() {
         let app = App::with_seed(1);
         let screen = render(&app, 80, 24);
-        // Two starting tiles, plus the SCORE/BEST labels are not digits.
+        // Only board digits are counted, so the title and score boxes do not
+        // inflate this.
         assert!(
             numbers_on(&screen) >= 2,
             "expected tiles on screen:\n{screen}"

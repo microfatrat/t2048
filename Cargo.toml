@@ -1,6 +1,6 @@
 [package]
 name = "t2048"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 # The README claims this too; keeping it here makes cargo fail early and
 # clearly instead of letting an old toolchain trip over edition 2024 features.
@@ -15,7 +15,9 @@ categories = ["games", "command-line-utilities"]
 [dependencies]
 crossterm = "0.29.0"
 rand = "0.10.3"
-ratatui = "0.30.2"
+# Only the widgets and backend actually used here; the default feature set also
+# pulls in the calendar widget, layout cache, macros and underline support.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 
 # `cargo build --release` produces a single small binary.
 [profile.release]

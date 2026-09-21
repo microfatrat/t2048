@@ -120,8 +120,31 @@ pub fn lighten(color: Color, by: u8) -> Color {
             g.saturating_add(by),
             b.saturating_add(by),
         ),
-        Color::Indexed(i) if i >= 232 => Color::Indexed(i),
+        Color::Indexed(i) => Color::Indexed(lighten_indexed(i, by)),
         other => other,
+    }
+}
+
+/// Brightens an xterm-256 index without leaving the indexed palette, so
+/// `--mono` mode still shows the spawn highlight.
+fn lighten_indexed(index: u8, by: u8) -> u8 {
+    match index {
+        // The eight dim system colours have conventional bright partners.
+        0..=7 if by > 0 => index + 8,
+        0..=7 => index,
+        // The bright half is already as bright as those colours get.
+        8..=15 => index,
+        // The 6x6x6 colour cube: decode, step every channel up, re-encode.
+        16..=231 => {
+            let n = index - 16;
+            let step = by / 40;
+            let r = (n / 36 + step).min(5);
+            let g = ((n % 36) / 6 + step).min(5);
+            let b = (n % 6 + step).min(5);
+            16 + r * 36 + g * 6 + b
+        }
+        // The grayscale ramp, which runs from nearly black to white.
+        _ => index.saturating_add(by / 12),
     }
 }
 
@@ -187,5 +210,21 @@ mod tests {
     fn lighten_saturates_instead_of_wrapping() {
         assert_eq!(lighten(Color::Rgb(250, 10, 0), 40), Color::Rgb(255, 50, 40));
         assert_eq!(lighten(Color::Rgb(0, 0, 0), 0), Color::Rgb(0, 0, 0));
+    }
+
+    #[test]
+    fn lighten_also_works_for_the_indexed_palette() {
+        // A dim system colour moves to its bright partner...
+        assert_eq!(lighten(Color::Indexed(1), 45), Color::Indexed(9));
+        // ...a cube colour steps up within the cube...
+        assert_ne!(lighten(Color::Indexed(16), 45), Color::Indexed(16));
+        // ...and a grayscale entry moves along the ramp.
+        assert_ne!(lighten(Color::Indexed(232), 45), Color::Indexed(232));
+        // The bright half has nowhere further to go.
+        assert_eq!(lighten(Color::Indexed(15), 45), Color::Indexed(15));
+        // A zero amount leaves every palette alone.
+        assert_eq!(lighten(Color::Indexed(1), 0), Color::Indexed(1));
+        assert_eq!(lighten(Color::Indexed(16), 0), Color::Indexed(16));
+        assert_eq!(lighten(Color::Indexed(232), 0), Color::Indexed(232));
     }
 }

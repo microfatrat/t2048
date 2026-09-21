@@ -1,7 +1,6 @@
 //! The `t2048` binary: a terminal front end for the library.
 
 use std::io;
-use std::panic;
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyEventKind};
@@ -13,6 +12,9 @@ use t2048::ui;
 
 /// How often we wake up to advance the spawn highlight.
 const TICK: Duration = Duration::from_millis(60);
+/// How often we wake up when no animation is running. Input still wakes us
+/// immediately, so this only trades idle CPU for a slower animation clock.
+const IDLE_TICK: Duration = Duration::from_secs(1);
 
 fn main() -> io::Result<()> {
     // `args_os` rather than `args`: on Windows the arguments arrive as UTF-16
@@ -34,8 +36,8 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    restore_terminal_on_panic();
-
+    // `ratatui::init` installs a panic hook that restores the terminal, so a
+    // panic cannot leave it in raw mode; no hook of our own is needed.
     let terminal = ratatui::init();
     let result = run(terminal, &options);
     ratatui::restore();
@@ -63,9 +65,16 @@ fn run(mut terminal: DefaultTerminal, options: &Options) -> io::Result<()> {
             app.mark_drawn();
         }
 
-        if event::poll(TICK)? {
+        // The highlight is the only animation, so when it is not running there
+        // is nothing to do until input arrives.
+        let timeout = if app.flash() > 0 { TICK } else { IDLE_TICK };
+        if event::poll(timeout)? {
             match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key),
+                Event::Key(key)
+                    if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                {
+                    app.on_key(key);
+                }
                 // A resize invalidates the layout, so redraw at the new size.
                 Event::Resize(_, _) => app.request_redraw(),
                 _ => {}
@@ -77,15 +86,6 @@ fn run(mut terminal: DefaultTerminal, options: &Options) -> io::Result<()> {
 
     app.save_best();
     Ok(())
-}
-
-/// Makes sure a panic does not leave the terminal in raw mode.
-fn restore_terminal_on_panic() {
-    let previous = panic::take_hook();
-    panic::set_hook(Box::new(move |info| {
-        ratatui::restore();
-        previous(info);
-    }));
 }
 
 /// Command line options.

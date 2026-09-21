@@ -188,11 +188,7 @@ impl Game {
         game.history.clear();
         game.future.clear();
         game.spawned = None;
-        game.status = if is_stuck(&grid) {
-            Status::Lost
-        } else {
-            Status::Playing
-        };
+        game.refresh_status();
         game
     }
 
@@ -209,13 +205,12 @@ impl Game {
             spawned: None,
             moves: 0,
         };
-        game.spawn_tile();
-        game.spawn_tile();
+        game.reset();
         game
     }
 
-    /// Resets the board, keeping the best score.
-    pub fn restart(&mut self) {
+    /// Clears the board and starts a fresh game, keeping `best` and the RNG.
+    fn reset(&mut self) {
         self.grid = [[0; SIZE]; SIZE];
         self.score = 0;
         self.status = Status::Playing;
@@ -226,6 +221,11 @@ impl Game {
         self.moves = 0;
         self.spawn_tile();
         self.spawn_tile();
+    }
+
+    /// Resets the board, keeping the best score.
+    pub fn restart(&mut self) {
+        self.reset();
     }
 
     /// Pushes every tile in `dir`. Returns `true` if the board changed.
@@ -297,7 +297,10 @@ impl Game {
     pub fn continue_after_win(&mut self) {
         if self.status == Status::Won {
             self.win_acknowledged = true;
-            self.status = Status::Playing;
+            // A board can be winning and stuck at the same time when it was
+            // built through [`Game::from_grid`], so re-check instead of
+            // assuming play can continue.
+            self.refresh_status();
         }
     }
 
@@ -352,21 +355,25 @@ impl Game {
     }
 
     fn spawn_tile(&mut self) -> Option<(usize, usize)> {
-        let mut empty = Vec::with_capacity(SIZE * SIZE);
+        // The board only has 16 cells, so a stack array avoids a heap
+        // allocation on every productive move.
+        let mut empty = [(0usize, 0usize); SIZE * SIZE];
+        let mut len = 0;
         for row in 0..SIZE {
             for col in 0..SIZE {
                 if self.grid[row][col] == 0 {
-                    empty.push((row, col));
+                    empty[len] = (row, col);
+                    len += 1;
                 }
             }
         }
 
-        if empty.is_empty() {
+        if len == 0 {
             self.spawned = None;
             return None;
         }
 
-        let (row, col) = empty[self.rng.random_range(0..empty.len())];
+        let (row, col) = empty[self.rng.random_range(0..len)];
         // The classic distribution: 90% twos, 10% fours.
         self.grid[row][col] = if self.rng.random_range(0..10) == 0 {
             4
@@ -491,6 +498,24 @@ mod tests {
         let mut mergeable = stuck;
         mergeable[0][1] = mergeable[0][0];
         assert!(!is_stuck(&mergeable));
+    }
+
+    #[test]
+    fn from_grid_recognises_a_board_that_already_won() {
+        let game = Game::from_grid([[2048, 0, 0, 0], [0; SIZE], [0; SIZE], [0; SIZE]], 0);
+        assert_eq!(game.status(), Status::Won);
+    }
+
+    #[test]
+    fn a_stuck_winning_board_continues_into_a_loss() {
+        // Fully packed with no equal neighbours, but already containing 2048:
+        // `from_grid` accepts such a board, so continuing must notice the loss.
+        let grid = [[2048, 2, 4, 8], [4, 8, 2, 4], [2, 4, 8, 2], [8, 2, 4, 8]];
+        let mut game = Game::from_grid(grid, 0);
+        assert_eq!(game.status(), Status::Won);
+
+        game.continue_after_win();
+        assert_eq!(game.status(), Status::Lost);
     }
 
     #[test]

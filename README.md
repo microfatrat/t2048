@@ -1,8 +1,12 @@
 # t2048 — 终端版 2048
 
+[![CI](https://github.com/microfatrat/t2048/actions/workflows/ci.yml/badge.svg)](https://github.com/microfatrat/t2048/actions/workflows/ci.yml)
+[![Release](https://github.com/microfatrat/t2048/actions/workflows/release.yml/badge.svg)](https://github.com/microfatrat/t2048/actions/workflows/release.yml)
+[![Security audit](https://github.com/microfatrat/t2048/actions/workflows/audit.yml/badge.svg)](https://github.com/microfatrat/t2048/actions/workflows/audit.yml)
+
 用 Rust + [ratatui](https://ratatui.rs) 写的 2048，直接在终端里玩。
 
-当前版本 **1.0.0**，变更见 [更新日志](CHANGELOG.md)。
+当前版本 **1.0.1**，变更见 [更新日志](CHANGELOG.md)。
 
 ![游戏截图](assets/screenshot.png)
 
@@ -41,8 +45,8 @@ t2048
 
 | 平台 | 验证方式 | 结果 |
 | --- | --- | --- |
-| Linux x86_64 | `cargo build --release`、真实 pty 交互测试、`cargo test` | ✅ 93 个测试通过 |
-| Windows x86_64 (MSVC) | 用 Windows 工具链交叉编译出 `t2048.exe`，在 Windows 上运行并 `cargo test` | ✅ 93 个测试通过 |
+| Linux x86_64 | `cargo build --release`、真实 pty 交互测试、`cargo test` | ✅ 99 个测试通过 |
+| Windows x86_64 (MSVC) | 1.0.0 时用 Windows 工具链交叉编译出 `t2048.exe`，在 Windows 上运行并 `cargo test` | ⚠️ 1.0.0 的 93 个测试通过；本次新增测试未复测 |
 | macOS | 未编译验证（本机没有 Apple 工具链）。`cargo tree --target aarch64-apple-darwin` 依赖解析正常，且 macOS 走的是和 Linux 相同的代码路径 | ⚠️ 未实测 |
 
 最高分的存放位置按平台区分：
@@ -91,6 +95,7 @@ t2048 [OPTIONS]
 
 -h, --help        显示帮助
     --mono        使用 256 色配色（等价于设置 NO_COLOR）
+    --no-color    --mono 的别名
     --seed <N>    固定随机种子，便于复现某局游戏
 ```
 
@@ -113,7 +118,7 @@ t2048 [OPTIONS]
 ## 测试
 
 ```bash
-cargo test      # 93 个测试
+cargo test      # 99 个测试
 cargo clippy --all-targets
 ```
 

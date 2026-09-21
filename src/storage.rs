@@ -5,7 +5,7 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The file the best score is stored in, if a data directory can be found.
 pub fn best_score_path() -> Option<PathBuf> {
@@ -78,7 +78,26 @@ pub fn save_best(score: u64) {
     {
         return;
     }
-    let _ = fs::write(path, score.to_string());
+    write_best(&path, score);
+}
+
+/// Writes the score through a temporary file, so a crash cannot leave the real
+/// file truncated or half-written.
+fn write_best(path: &Path, score: u64) {
+    let text = score.to_string();
+    let temp = path.with_extension("tmp");
+    if fs::write(&temp, &text).is_err() {
+        return;
+    }
+    if fs::rename(&temp, path).is_ok() {
+        return;
+    }
+    // Windows refuses to rename over an existing file, so drop the old file
+    // and try once more. Either way this stays best-effort.
+    let _ = fs::remove_file(path);
+    if fs::rename(&temp, path).is_err() {
+        let _ = fs::remove_file(&temp);
+    }
 }
 
 #[cfg(test)]
@@ -172,5 +191,23 @@ mod tests {
     fn loading_never_panics() {
         // Whatever the environment looks like, this must return a number.
         let _ = load_best();
+    }
+
+    #[test]
+    fn a_best_score_round_trips_through_a_file() {
+        let dir = std::env::temp_dir().join(format!("t2048-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("best");
+
+        write_best(&path, 1234);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "1234");
+
+        // Writing again replaces the old value and leaves no temp file.
+        write_best(&path, 5678);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "5678");
+        assert!(!path.with_extension("tmp").exists());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
