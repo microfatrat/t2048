@@ -13,3 +13,6 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # Keep the MSRV pin under manual control.
+      - dependency-name: "dtolnay/rust-toolchain"
