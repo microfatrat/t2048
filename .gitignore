@@ -1,0 +1,10 @@
+# Cargo build output
+/target
+
+# Rust backup files
+**/*.rs.bk
+
+# Editor and OS cruft
+.DS_Store
+Thumbs.db
+*.swp
