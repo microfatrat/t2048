@@ -42,7 +42,8 @@ chmod +x t2048-x86_64-unknown-linux-gnu
 ./t2048-x86_64-unknown-linux-gnu
 ```
 
-发布产物附带 `SHA256SUMS`，下载后可以校验。
+发布产物附带 `SHA256SUMS`（下载后可以校验），以及 `LICENSE` 与
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md)。
 
 ### 从源码构建
 
@@ -165,4 +166,11 @@ cargo test      # 99 个测试
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
+
+t2048 编译成的单个可执行文件里静态链接了 `ratatui`、`crossterm`、`rand` 等第三方
+crate，它们的许可证与需要保留的版权声明汇总在
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)。该文件由
+`scripts/gen-third-party-licenses.py` 依据 `Cargo.lock` 与本地 Cargo 缓存生成，
+改动依赖后可用 `python3 scripts/gen-third-party-licenses.py` 重新生成，
+`--check` 只比较不写入。
 

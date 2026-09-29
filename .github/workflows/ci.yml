@@ -126,3 +126,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo package --locked
+
+  licenses:
+    name: license notice
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # --target is intentionally omitted: cargo then fetches every platform's
+      # crates, which is exactly the set the notice is generated from.
+      - run: cargo fetch --locked
+      - name: THIRD-PARTY-LICENSES.md is up to date
+        run: python3 scripts/gen-third-party-licenses.py --check

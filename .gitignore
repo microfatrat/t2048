@@ -4,6 +4,13 @@
 # Rust backup files
 **/*.rs.bk
 
+# Local Cargo home used to fetch every platform's crates for the
+# third-party license notice (scripts/gen-third-party-licenses.py).
+/.cargo-home
+
+# Python bytecode from the license-notice generator
+__pycache__/
+
 # Editor and OS cruft
 .DS_Store
 Thumbs.db

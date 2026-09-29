@@ -98,10 +98,13 @@ jobs:
       contents: write
       actions: read
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+      - name: Include license notices
+        run: cp LICENSE THIRD-PARTY-LICENSES.md dist/
       - name: Generate checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS

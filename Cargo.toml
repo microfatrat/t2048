@@ -13,8 +13,10 @@ repository = "https://github.com/microfatrat/t2048"
 license = "MIT"
 keywords = ["game", "tui", "terminal", "2048", "ratatui"]
 categories = ["games", "command-line-utilities"]
-# Repo-only files; there is no reason to ship the CI configuration in the crate.
-exclude = [".github/"]
+# Repo-only files; there is no reason to ship the CI configuration or the
+# license-notice generator in the crate. THIRD-PARTY-LICENSES.md, which is part
+# of the distribution, stays included.
+exclude = [".github/", "scripts/"]
 
 [dependencies]
 crossterm = "0.29.0"

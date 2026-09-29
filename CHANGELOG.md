@@ -11,6 +11,14 @@ t2048 是终端应用而不是库，所以版本号描述的是**用户可见的
 - **次版本号**：向后兼容地新增按键、参数或界面元素。
 - **修订号**：不改变行为的修复（渲染错误、崩溃、文案等）。
 
+## 未发布
+
+### 新增
+
+- 增加 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md)：列出静态链接进可执行文件的第三方组件、各许可证全文与需要保留的版权声明，配套生成 / 校验脚本 `scripts/gen-third-party-licenses.py`
+- release 产物额外附带 `LICENSE` 与 `THIRD-PARTY-LICENSES.md`，并计入 `SHA256SUMS`
+- README 的许可证一节说明第三方声明与重新生成方式
+
 ## 1.0.2 - 2026-09-21
 
 ### 变更
